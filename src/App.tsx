@@ -120,7 +120,7 @@ const DEMO_ASSETS: DemoAsset[] = [
 function App() {
   const [darkMode, setDarkMode] = useState<boolean>(true);
   const [selectedAsset, setSelectedAsset] = useState<DemoAsset | null>(null);
-  const [selectedEngine, setSelectedEngine] = useState<"yolo" | "gemini">("yolo");
+  const [selectedEngine] = useState<"gemini">("gemini");
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<number>(0);
   const [analysisStepText, setAnalysisStepText] = useState<string>("");
@@ -326,21 +326,11 @@ function App() {
         <div className="header-logo-group">
           <div className="ibm-logo">IBM</div>
           <div className="header-title">
-            Infrastructure Inspect <span className="header-subtitle">v9.42</span>
+            Infrastructure Inspect
           </div>
         </div>
 
         <div className="header-controls">
-          <div className="system-status">
-            <span>
-              <span className="status-dot"></span> Core AI Operational
-            </span>
-            <span>
-              <Cpu style={{ width: "14px", height: "14px", verticalAlign: "middle", marginRight: "4px" }} />
-              ResNet-V9 Engine
-            </span>
-          </div>
-
           <button 
             onClick={() => setDarkMode(!darkMode)}
             className="btn-icon"
@@ -365,25 +355,6 @@ function App() {
             <p className="hero-description">
               Inspect critical concrete, metal, and mechanical infrastructure using deep vision transformers. Upload structural scans to locate cracks, concrete spalling, or corrosion damage immediately.
             </p>
-          </div>
-          
-          <div className="hero-stats">
-            <div>
-              <div className="stat-label">Platform Status</div>
-              <div className="stat-value" style={{ color: "#24a148" }}>ACTIVE</div>
-            </div>
-            <div>
-              <div className="stat-label">Diagnoses SLA</div>
-              <div className="stat-value">&lt; 3.0s</div>
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
-              <div className="stat-label">Inspection F1</div>
-              <div className="stat-value">98.42%</div>
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.5rem", marginTop: "0.25rem" }}>
-              <div className="stat-label">Active Node</div>
-              <div className="stat-value" style={{ color: "var(--primary)" }}>us-east-core</div>
-            </div>
           </div>
         </section>
 
@@ -514,37 +485,26 @@ function App() {
               </div>
 
               <div style={{ textAlign: "center", fontSize: "0.75rem", fontFamily: "var(--font-mono)", color: "var(--muted-foreground)", margin: "1.5rem 0" }}>
-                — OR UPLOAD CUSTOM STRUCTURAL PHOTO —
+                — OR UPLOAD CUSTOM STRUCTURAL PHOTO/VIDEO —
               </div>
 
               <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px", marginBottom: "1.5rem" }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", color: "var(--muted-foreground)", textTransform: "uppercase" }}>
-                  Selected Engine:
+                  Active Engine:
                 </span>
-                <div style={{ position: "relative" }}>
-                  <select
-                    value={selectedEngine}
-                    onChange={(e) => setSelectedEngine(e.target.value as "yolo" | "gemini")}
-                    style={{
-                      backgroundColor: "var(--muted)",
-                      color: "var(--foreground)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "0px",
-                      padding: "0.4rem 2rem 0.4rem 0.75rem",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "0.75rem",
-                      textTransform: "uppercase",
-                      appearance: "none",
-                      cursor: "pointer"
-                    }}
-                  >
-                    <option value="yolo">YOLOv8-Seg (Local Model)</option>
-                    <option value="gemini">Gemini 2.5 Flash (Cloud VLM)</option>
-                  </select>
-                  <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.55rem", color: "var(--muted-foreground)" }}>
-                    ▼
-                  </div>
-                </div>
+                <span style={{
+                  backgroundColor: "var(--muted)",
+                  color: "var(--primary)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "0px",
+                  padding: "0.4rem 0.75rem",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.75rem",
+                  fontWeight: "bold",
+                  textTransform: "uppercase"
+                }}>
+                  Gemini 3.5 Flash (Cloud VLM)
+                </span>
               </div>
 
               <div
@@ -558,7 +518,7 @@ function App() {
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
-                  accept="image/*"
+                  accept="image/*,video/*"
                   style={{ display: "none" }}
                 />
                 
@@ -566,10 +526,10 @@ function App() {
                   <Upload size={20} />
                 </div>
                 <h3 className="dropzone-title">
-                  Drag & drop asset photo here, or <span className="dropzone-link">browse</span>
+                  Drag & drop asset photo or video here, or <span className="dropzone-link">browse</span>
                 </h3>
                 <p className="dropzone-subtitle">
-                  Accepts PNG, JPG, JPEG (Max 15MB)
+                  Accepts PNG, JPG, JPEG, MP4, WebM (Max 15MB)
                 </p>
               </div>
             </motion.div>
@@ -738,7 +698,7 @@ function App() {
                       {selectedAsset.defectArea !== undefined && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "1.5rem", borderTop: "1px dashed var(--border)", paddingTop: "1rem" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", fontFamily: "var(--font-mono)" }}>
-                            <span style={{ color: "var(--muted-foreground)" }}>YOLO Defect Area Ratio</span>
+                            <span style={{ color: "var(--muted-foreground)" }}>Defect Area Ratio</span>
                             <span style={{ color: "var(--critical)", fontWeight: "bold" }}>{selectedAsset.defectArea}%</span>
                           </div>
                           <div className="progress-bar-track">
@@ -837,11 +797,6 @@ function App() {
       <footer className="footer">
         <div>
           © 2026 IBM Corporation & Partners. Diagnostic engines licensed under Apache-2.0.
-        </div>
-        <div className="footer-links">
-          <a href="#">Diagnostic Terms</a>
-          <a href="#">AI Ethics Statement</a>
-          <a href="#">System Specs</a>
         </div>
       </footer>
     </div>

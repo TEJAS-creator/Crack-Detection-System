@@ -253,7 +253,7 @@ body {
 }
 
 .hero-text {
-  max-w: 600px;
+  max-width: 800px;
 }
 
 .hero-tag {
@@ -924,33 +924,12 @@ body {
   background-color: var(--card);
   padding: 1.5rem 2rem;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  gap: 1rem;
   font-family: var(--font-mono);
   font-size: 0.7rem;
   color: var(--muted-foreground);
-}
-
-@media (min-width: 768px) {
-  .footer {
-    flex-direction: row;
-  }
-}
-
-.footer-links {
-  display: flex;
-  gap: 1.5rem;
-}
-
-.footer-links a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.footer-links a:hover {
-  color: var(--primary);
+  text-align: center;
 }
 
 /* Animations */

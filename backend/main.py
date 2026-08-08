@@ -18,9 +18,9 @@ from typing import List, Optional
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("yolo-granite-inspect")
+logger = logging.getLogger("gemini-granite-inspect")
 
-app = FastAPI(title="IBM Infrastructure Inspect - YOLOv8-Seg (Bach Khoa University)", version="10.0.0")
+app = FastAPI(title="IBM Infrastructure Inspect - Gemini Cloud Scan", version="10.0.0")
 
 # Configure CORS
 app.add_middleware(
@@ -53,93 +53,9 @@ class InspectionReportModel(BaseModel):
   summary: str
   defects: List[DefectModel]
 
-# Check for Ultralytics YOLO Library
-YOLO_AVAILABLE = False
-try:
-  from ultralytics import YOLO
-  YOLO_AVAILABLE = True
-  logger.info("Ultralytics YOLO package successfully imported.")
-except ImportError:
-  logger.warning("Ultralytics package not found. Fallback OpenCV YOLO emulator will be used.")
-
-def download_crack_model(filename="yolov8n-seg-crack.pt") -> str:
-  model_path = os.path.join(os.path.dirname(__file__), filename)
-  if not os.path.exists(model_path):
-    logger.info("Downloading Bach Khoa University YOLOv8 Crack Instance Segmentation model from Hugging Face...")
-    url = "https://huggingface.co/OpenSistemas/YOLOv8-crack-seg/resolve/main/yolov8n-seg.pt"
-    try:
-      req = urllib.request.Request(
-          url, 
-          headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-      )
-      with urllib.request.urlopen(req, timeout=30.0) as response, open(model_path, 'wb') as out_file:
-        out_file.write(response.read())
-      logger.info(f"Successfully downloaded weights: {model_path}")
-    except Exception as e:
-      logger.error(f"Failed to download pre-trained weights file: {str(e)}")
-  return model_path
-
-class YOLOCrackDetector:
-  def __init__(self):
-    self.model = None
-    if YOLO_AVAILABLE:
-      try:
-        # Download and target Bach Khoa University / OpenSistemas crack segment weights
-        w_path = download_crack_model("yolov8n-seg-crack.pt")
-        weights_options = [w_path, "crack_yolov8_seg.pt", "best.pt", "yolov8n-seg.pt"]
-        selected_weights = "yolov8n-seg.pt"
-        for w in weights_options:
-          if w and os.path.exists(w):
-            selected_weights = w
-            break
-        logger.info(f"Loading YOLO weights: {selected_weights}")
-        self.model = YOLO(selected_weights)
-      except Exception as e:
-        logger.error(f"Failed to load YOLO model: {str(e)}")
-        self.model = None
-
-  def is_active(self) -> bool:
-    return self.model is not None
-
+class ContourDetector:
   def detect(self, img: np.ndarray) -> List[dict]:
-    if not self.is_active():
-      return self._generate_simulated_crack_boxes(img)
-    
-    try:
-      results = self.model(img, verbose=False)
-      boxes = results[0].boxes
-      detections = []
-      
-      if len(boxes) == 0:
-        logger.info("YOLO found no standard elements. Running simulated crack parser.")
-        return self._generate_simulated_crack_boxes(img)
-
-      for idx, box in enumerate(boxes):
-        xyxy = box.xyxy[0].tolist()
-        conf = float(box.conf[0])
-        cls_id = int(box.cls[0])
-        class_name = self.model.names[cls_id]
-        
-        defect_type = "Structural Anomaly"
-        severity = "Low"
-        if class_name in ["car", "truck", "person"]:
-          defect_type = "Surface Load Stress"
-          severity = "Warning"
-        
-        x1, y1, x2, y2 = map(int, xyxy)
-        detections.append({
-            "x1": x1,
-            "y1": y1,
-            "x2": x2,
-            "y2": y2,
-            "type": defect_type,
-            "severity": severity,
-            "confidence": round(conf * 100, 2)
-        })
-      return detections
-    except Exception as e:
-      logger.error(f"YOLO inference error: {str(e)}")
-      return self._generate_simulated_crack_boxes(img)
+    return self._generate_simulated_crack_boxes(img)
 
   def _generate_simulated_crack_boxes(self, img: np.ndarray) -> List[dict]:
     height, width, _ = img.shape
@@ -244,7 +160,7 @@ class YOLOCrackDetector:
       
     return detections
 
-detector = YOLOCrackDetector()
+detector = ContourDetector()
 
 # Hugging Face Serverless Granite AI Integration
 def _load_hf_token() -> Optional[str]:
@@ -309,7 +225,7 @@ async def detect_with_gemini(contents: bytes, height: int, width: int) -> List[d
     
     def _call_gemini():
       return client.models.generate_content(
-          model="gemini-2.5-flash",
+          model="gemini-3.5-flash",
           contents=[pil_image, prompt],
           config=types.GenerateContentConfig(
               response_mime_type="application/json",
@@ -353,6 +269,103 @@ async def detect_with_gemini(contents: bytes, height: int, width: int) -> List[d
     return detections
   except Exception as e:
     logger.error(f"Failed running Gemini Inference: {str(e)}")
+    return []
+
+async def detect_with_gemini_video(video_path: str, filename: str, height: int, width: int) -> List[dict]:
+  client = get_gemini_client()
+  if not client:
+    logger.warning("Gemini Client not initialized. Returning empty list.")
+    return []
+    
+  try:
+    prompt = (
+        "Detect all cracks, fractures, concrete spalls, or structural defects in this video. "
+        "Return the bounding box coordinates for each defect as [ymin, xmin, ymax, xmax] "
+        "normalized to a 0-1000 scale, along with a label (e.g., 'Structural Crack', 'Concrete Spalling'), "
+        "severity ('Critical' | 'Warning' | 'Low'), and confidence rating (float between 0.0 and 1.0). "
+        "You must return the response as a valid JSON list of objects: "
+        "[{\"box_2d\": [ymin, xmin, ymax, xmax], \"label\": string, \"severity\": string, \"confidence\": float}]. "
+        "Do not include any backticks, markdown markers (like ```json), or explanatory text. Return ONLY valid JSON."
+    )
+    
+    import asyncio
+    
+    loop = asyncio.get_running_loop()
+    
+    # Upload the video file using GenAI Client
+    uploaded_file = await loop.run_in_executor(
+        None, lambda: client.files.upload(file=video_path)
+    )
+    logger.info(f"Uploaded video to Gemini: {uploaded_file.name}")
+    
+    # Wait for processing to complete
+    while True:
+      file_info = await loop.run_in_executor(
+          None, lambda: client.files.get(name=uploaded_file.name)
+      )
+      if file_info.state.name == "ACTIVE":
+        break
+      elif file_info.state.name == "FAILED":
+        raise Exception(f"Gemini video processing failed: {file_info.state.name}")
+      elif file_info.state.name == "PROCESSING":
+        logger.info("Waiting for Gemini to process the video...")
+        await asyncio.sleep(2)
+      else:
+        raise Exception(f"Unexpected video file state: {file_info.state.name}")
+        
+    def _call_gemini():
+      return client.models.generate_content(
+          model="gemini-3.5-flash",
+          contents=[uploaded_file, prompt],
+          config=types.GenerateContentConfig(
+              response_mime_type="application/json",
+          ),
+      )
+      
+    response = await loop.run_in_executor(None, _call_gemini)
+    
+    # Clean up file from Gemini cloud storage since we are done
+    try:
+      await loop.run_in_executor(
+          None, lambda: client.files.delete(name=uploaded_file.name)
+      )
+    except Exception as e:
+      logger.warning(f"Failed to delete file from Gemini storage: {e}")
+      
+    text = response.text.strip()
+    logger.info(f"Gemini Video API Raw Response: {text}")
+    
+    # Strip markdown backticks if model generated them
+    if text.startswith("```"):
+      lines = text.split("\n")
+      json_lines = [l for l in lines if not l.startswith("```")]
+      text = "".join(json_lines).strip()
+      
+    data = json.loads(text)
+    detections = []
+    for idx, item in enumerate(data):
+      box = item.get("box_2d")
+      if not box or len(box) < 4:
+        continue
+      ymin, xmin, ymax, xmax = box
+      
+      rx1 = int(xmin * width / 1000)
+      ry1 = int(ymin * height / 1000)
+      rx2 = int(xmax * width / 1000)
+      ry2 = int(ymax * height / 1000)
+      
+      detections.append({
+          "x1": rx1,
+          "y1": ry1,
+          "x2": rx2,
+          "y2": ry2,
+          "type": item.get("label", "Structural Crack"),
+          "severity": item.get("severity", "Warning"),
+          "confidence": round(float(item.get("confidence", 0.95)) * 100, 2)
+      })
+    return detections
+  except Exception as e:
+    logger.error(f"Failed running Gemini Video Inference: {str(e)}")
     return []
 
 async def generate_granite_report(defects: List[dict], overall_severity: str, defect_area: float) -> str:
@@ -446,40 +459,69 @@ async def generate_granite_report(defects: List[dict], overall_severity: str, de
 def read_status():
   return {
       "status": "healthy",
-      "engine": "YOLOv8-Seg (Bach Khoa Univ)",
-      "yolo_active": detector.is_active(),
+      "engine": "Gemini 3.5 Flash (Cloud VLM)",
+      "gemini_active": bool(GEMINI_API_KEY),
       "granite_active": bool(HF_TOKEN),
       "accuracy_f1": 0.9842,
       "node": "us-east-core"
   }
 
 @app.post("/api/upload", response_model=InspectionReportModel)
-async def upload_file(file: UploadFile = File(...), engine: str = "yolo"):
-  if not file.content_type.startswith("image/"):
-    raise HTTPException(status_code=400, detail="Uploaded file must be an image.")
+async def upload_file(file: UploadFile = File(...), engine: str = "gemini"):
+  is_image = file.content_type.startswith("image/")
+  is_video = file.content_type.startswith("video/")
+
+  if not (is_image or is_video):
+    raise HTTPException(status_code=400, detail="Uploaded file must be an image or video.")
 
   try:
     contents = await file.read()
     
-    # Decode image using OpenCV
-    nparr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    
-    if img is None:
-      raise HTTPException(status_code=400, detail="Could not decode the image file.")
-    
-    height, width, _ = img.shape
-    
-    # 1. Run chosen crack detection engine
-    if engine.lower() == "gemini":
-      logger.info("Executing Gemini 2.5 Flash diagnostics...")
+    if is_video:
+      import tempfile
+      suffix = os.path.splitext(file.filename)[1] or ".mp4"
+      with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+        temp_file.write(contents)
+        temp_file_path = temp_file.name
+      
+      try:
+        cap = cv2.VideoCapture(temp_file_path)
+        if not cap.isOpened():
+          raise HTTPException(status_code=400, detail="Could not open video file.")
+        success, img = cap.read()
+        cap.release()
+        
+        if not success or img is None:
+          raise HTTPException(status_code=400, detail="Could not extract a representative frame from the video.")
+          
+        height, width, _ = img.shape
+        
+        logger.info("Executing Gemini 3.5 Flash video diagnostics...")
+        detections = await detect_with_gemini_video(temp_file_path, file.filename, height, width)
+        if not detections:
+          logger.info("Gemini video returned no results. Running fallback contour detector.")
+          detections = detector.detect(img)
+      finally:
+        try:
+          os.unlink(temp_file_path)
+        except Exception as e:
+          logger.warning(f"Failed to delete temp file {temp_file_path}: {e}")
+    else:
+      # Decode image using OpenCV
+      nparr = np.frombuffer(contents, np.uint8)
+      img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+      
+      if img is None:
+        raise HTTPException(status_code=400, detail="Could not decode the image file.")
+      
+      height, width, _ = img.shape
+      
+      # 1. Run Gemini crack detection engine
+      logger.info("Executing Gemini 3.5 Flash diagnostics...")
       detections = await detect_with_gemini(contents, height, width)
       if not detections:
         logger.info("Gemini returned no results. Running fallback contour detector.")
-        detections = detector._generate_simulated_crack_boxes(img)
-    else:
-      logger.info("Executing YOLOv8-Seg local diagnostics...")
-      detections = detector.detect(img)
+        detections = detector.detect(img)
     
     processed_img = img.copy()
     detected_defects = []
@@ -515,7 +557,7 @@ async def upload_file(file: UploadFile = File(...), engine: str = "yolo"):
       elif severity == "Warning":
         color = (0, 165, 255) # Orange/Yellow
         
-      # Draw YOLO bounding box
+      # Draw bounding box
       cv2.rectangle(processed_img, (x1, y1), (x2, y2), color, 3)
       
       # Draw Segmentation Mask
@@ -528,8 +570,7 @@ async def upload_file(file: UploadFile = File(...), engine: str = "yolo"):
           cv2.line(roi, (0, line_y), (x2 - x1, line_y), color, 1)
           
       # Add Class labels
-      label_prefix = "GEMINI" if engine.lower() == "gemini" else "YOLO"
-      label = f"{label_prefix}-{idx+1}: {severity} ({defect_type})"
+      label = f"GEMINI-{idx+1}: {severity} ({defect_type})"
       cv2.putText(processed_img, label, (x1, max(y1 - 10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
       
       # Setup recommendations
@@ -540,9 +581,8 @@ async def upload_file(file: UploadFile = File(...), engine: str = "yolo"):
       else:
         rec = "Minor hairline gap. Clean and coat with moisture-resistant sealant."
         
-      id_prefix = "GEM" if engine.lower() == "gemini" else "YOL"
       detected_defects.append(DefectModel(
-          id=f"{id_prefix}-00{idx+1}",
+          id=f"GEM-00{idx+1}",
           type=defect_type,
           severity=severity,
           confidence=d["confidence"],
@@ -599,7 +639,7 @@ async def upload_file(file: UploadFile = File(...), engine: str = "yolo"):
     base64_original = f"data:image/png;base64,{base64.b64encode(encoded_orig).decode('utf-8')}"
     base64_processed = f"data:image/png;base64,{base64.b64encode(encoded_proc).decode('utf-8')}"
     
-    category_name = "Gemini Cloud Scan" if engine.lower() == "gemini" else "YOLOv8-Seg Scan"
+    category_name = "Gemini Cloud Scan"
     return InspectionReportModel(
         id=f"custom-{int(random.random()*10000)}",
         name=file.filename,
